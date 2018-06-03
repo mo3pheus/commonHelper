@@ -1,5 +1,6 @@
 package bootstrap;
 
+import encryption.KeyStoreCustom;
 import encryption.KeyStoreUtil;
 import util.LoggerUtil;
 import util.TrackedLogger;
@@ -21,10 +22,11 @@ public class Driver {
             TrackedLogger logger = new TrackedLogger(Driver.class);
             logger.info(" Project properties are loaded. Log file generated for this run = ");
             projectProperties = getProjectProperties(args[1]);
-            /*KeyStoreUtil.saveSignatureKeyObject();
-            KeyStoreUtil.saveRsaKeyObject();*/
+            //KeyStoreUtil.saveSignatureKeyObject();
+            //KeyStoreUtil.saveRsaKeyObject();
             //KeyStoreUtil.testKeyStore(args);
-            KeyStoreUtil.testRsaEncryption();
+            //KeyStoreUtil.testRsaEncryption();
+            KeyStoreUtil.testRsaEncryptionProtobuf();
         }  catch (Exception e) {
             e.printStackTrace();
         }

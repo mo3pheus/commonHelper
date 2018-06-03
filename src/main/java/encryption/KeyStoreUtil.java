@@ -1,5 +1,7 @@
 package encryption;
 
+import communications.protocol.ModuleDirectory;
+import space.exploration.communications.protocol.InstructionPayloadOuterClass;
 import sun.misc.IOUtils;
 import util.TrackedLogger;
 
@@ -172,6 +174,51 @@ public class KeyStoreUtil {
             logger.error("Exception ", e);
         } catch (IllegalBlockSizeException e) {
             logger.error("Exception ", e);
+        }
+    }
+
+    public static void testRsaEncryptionProtobuf() {
+        try {
+            logger.info(SEPARATOR);
+            logger.info("Read keystore.");
+            KeyStoreCustom rsaStore   = readKeyStore(KEYSTORE_FILE_RSA);
+            PublicKey      publicKey  = rsaStore.getKeyPair().getPublic();
+            PrivateKey     privateKey = rsaStore.getKeyPair().getPrivate();
+
+            logger.info("Encrypt using public key");
+            Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            logger.info(cipher.getProvider().getInfo());
+
+            logger.info("Read plain text");
+            byte[] plainText = null;
+            InstructionPayloadOuterClass.InstructionPayload.Builder iBuilder = InstructionPayloadOuterClass
+                    .InstructionPayload.newBuilder();
+            iBuilder.setTimeStamp(System.currentTimeMillis());
+            iBuilder.setSOS(false);
+            InstructionPayloadOuterClass.InstructionPayload.TargetPackage.Builder tBuilder =
+                    InstructionPayloadOuterClass.InstructionPayload.TargetPackage.newBuilder();
+            tBuilder.setRoverModule(ModuleDirectory.Module.CAMERA_SENSOR.getValue());
+            tBuilder.setAction("Smile for the camera!");
+            iBuilder.addTargets(tBuilder.build());
+            plainText = iBuilder.build().toByteArray();
+            logger.info("Plain text = " + new String(plainText, "UTF8"));
+
+            cipher.init(Cipher.ENCRYPT_MODE, publicKey);
+            byte[] cipherText = cipher.doFinal(plainText);
+            logger.info("Encrypted text = " + new String(cipherText, "UTF8"));
+
+            // decrypt the ciphertext using the private key
+            logger.info("Start decryption");
+            cipher.init(Cipher.DECRYPT_MODE, privateKey);
+            byte[] newPlainText = cipher.doFinal(cipherText);
+            InstructionPayloadOuterClass.InstructionPayload instructionPayload = InstructionPayloadOuterClass
+                    .InstructionPayload.parseFrom(newPlainText);
+            logger.info("Finish decryption: ");
+            logger.info(instructionPayload.toString());
+
+            logger.info(SEPARATOR);
+        } catch (Exception e) {
+            logger.error("IOException ", e);
         }
     }
 

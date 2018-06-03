@@ -96,6 +96,11 @@
             <artifactId>metrics-core</artifactId>
             <version>2.2.0</version>
         </dependency>
+        <dependency>
+            <groupId>space.exploration</groupId>
+            <artifactId>communications.protocol</artifactId>
+            <version>1.3</version>
+        </dependency>
 
     </dependencies>
 
