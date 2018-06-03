@@ -1,0 +1,5 @@
+ Project properties are loaded. Log file generated for this run = executionLogs/log_infoLevel_report_1518139691167.log
+Exception in thread "main" java.lang.NullPointerException
+	at bootstrap.Driver.getProjectProperties(Driver.java:55)
+	at bootstrap.Driver.main(Driver.java:27)
+ Project properties are loaded. Log file generated for this run = executionLogs/log_infoLevel_report_1518139803214.log
