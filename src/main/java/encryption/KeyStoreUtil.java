@@ -68,7 +68,6 @@ public class KeyStoreUtil {
         while ((len = bufin.read(buffer)) >= 0) {
             dsa.update(buffer, 0, len);
         }
-        ;
         bufin.close();
         byte[] realSig = dsa.sign();
 
@@ -89,7 +88,6 @@ public class KeyStoreUtil {
         FileInputStream keyfis = new FileInputStream("suepk");
         byte[]          encKey = new byte[keyfis.available()];
         keyfis.read(encKey);
-
         keyfis.close();
 
         X509EncodedKeySpec pubKeySpec = new X509EncodedKeySpec(encKey);
@@ -118,19 +116,6 @@ public class KeyStoreUtil {
         boolean verifies = sig.verify(sigToVerify);
 
         logger.info("signature verifies: " + verifies);
-
-        // get an DSA cipher object and print the provider
-//        Cipher cipher = Cipher.getInstance("DSA/RSA/ECB/PKCS1Padding");
-//        logger.info(cipher.getProvider().getInfo());
-//
-//        byte[] plainText = Files.readAllBytes(Paths.get(DATAFILE));
-//        logger.info(SEPARATOR);
-//        logger.info("Start of encryption");
-//        cipher.init(Cipher.ENCRYPT_MODE, publicKey);
-//        byte[] cipherText = cipher.doFinal(plainText);
-//
-//        logger.info("Finish encryption");
-//        logger.info("Encrypted Text = " + new String(cipherText));
     }
 
     public static void testRsaEncryption() {
