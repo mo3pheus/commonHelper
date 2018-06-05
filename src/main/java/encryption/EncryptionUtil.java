@@ -1,4 +1,4 @@
-package communications.encryption;
+package encryption;
 
 import certificates.RsaSecureComsCertificate;
 import space.exploration.communications.protocol.security.SecureMessage;
