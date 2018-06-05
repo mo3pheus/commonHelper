@@ -55,14 +55,14 @@ public class EncryptionUtil {
         return signature;
     }
 
-    public byte[] encryptMessage(File certificate, byte[] rawContent) throws Exception {
+    public static byte[] encryptMessage(File certificate, byte[] rawContent) throws Exception {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
         Cipher                   cipher          = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.ENCRYPT_MODE, comsCertificate.getMessagePubKey());
         return cipher.doFinal(rawContent);
     }
 
-    public byte[] decryptMessage(File certificate, byte[] encryptedContent) throws Exception {
+    public static byte[] decryptMessage(File certificate, byte[] encryptedContent) throws Exception {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
 
         Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
