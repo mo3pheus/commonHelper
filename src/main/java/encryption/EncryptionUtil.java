@@ -94,19 +94,20 @@ public class EncryptionUtil {
 
         int numBlocks = (int) Math.ceil((double) contentLength / (double)
                 ENCRYPTION_BLOCK_SIZE);
-        List<IsEncryptionService> encryptionServices = new ArrayList<>();
+        List<IsEncryptionService> encryptionServices = new ArrayList<>(numBlocks);
         ExecutorService           executorService    = Executors.newFixedThreadPool(numBlocks);
 
         int j = 0;
-        int k = 0;
         byte[] temp = (contentLength < ENCRYPTION_BLOCK_SIZE) ? new byte[contentLength] : new
                 byte[ENCRYPTION_BLOCK_SIZE];
 
+        int k = 0;
         for (int i = 0; i < contentLength; i++) {
             temp[j++] = rawContent[i];
             if (j == ENCRYPTION_BLOCK_SIZE || i == (contentLength - 1)) {
                 j = 0;
-                encryptionServices.add(new EncryptionServiceImpl(certificate, true, temp, k++));
+                encryptionServices.add(k, new EncryptionServiceImpl(certificate, true, temp, k));
+                k++;
             }
         }
 
@@ -129,14 +130,12 @@ public class EncryptionUtil {
         List<IsEncryptionService> decryptServices      = new ArrayList<>(encryptedContentSize);
 
         for (int i = 0; i < encryptedContentSize; i++) {
-            decryptServices.add(new EncryptionServiceImpl(certificate, false, secureMessagePacket.getContentList().get
-                    (i).toByteArray(), i));
+            decryptServices.add(i, new EncryptionServiceImpl(certificate, false, secureMessagePacket.getContentList()
+                    .get(i).toByteArray(), i));
         }
 
         List<Future<ByteString>> decryptResults = executorService.invokeAll(decryptServices);
-        for (Future<ByteString> byteStringFuture : decryptResults) {
-            contentList.add(byteStringFuture.get().toByteArray());
-        }
+        contentList = convertByteStringList(getProcessedMessages(decryptResults));
 
         int i = 0;
         for (byte[] temp : contentList) {
@@ -178,8 +177,17 @@ public class EncryptionUtil {
         List<ByteString> processedMessages = new ArrayList<>(service.size());
         int              i                 = 0;
         for (Future<ByteString> serviceFuture : service) {
-            processedMessages.add(i, serviceFuture.get());
+            ByteString bytes = serviceFuture.get();
+            processedMessages.add(i, bytes);
         }
         return processedMessages;
+    }
+
+    private static List<byte[]> convertByteStringList(List<ByteString> input) {
+        List<byte[]> temp = new ArrayList<>();
+        for (ByteString bytes : input) {
+            temp.add(bytes.toByteArray());
+        }
+        return temp;
     }
 }
