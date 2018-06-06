@@ -15,6 +15,7 @@ import java.security.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.*;
 
 public class EncryptionUtil {
     public static final int ENCRYPTION_BLOCK_SIZE = 2000;
@@ -91,41 +92,50 @@ public class EncryptionUtil {
         sBuilder.setSenderId(senderId);
         sBuilder.setCheckSum(ByteString.copyFrom(generateHash(rawContent)));
 
-        int              numBlocks  = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
-        List<ByteString> blockChain = new ArrayList<>(numBlocks);
-        int              j          = 0;
+        int numBlocks = (int) Math.ceil((double) contentLength / (double)
+                ENCRYPTION_BLOCK_SIZE);
+        List<IsEncryptionService> encryptionServices = new ArrayList<>();
+        ExecutorService           executorService    = Executors.newFixedThreadPool(numBlocks);
 
-        byte[] temp = null;
-        if (contentLength < ENCRYPTION_BLOCK_SIZE) {
-            temp = new byte[contentLength];
-        } else {
-            temp = new byte[ENCRYPTION_BLOCK_SIZE];
-        }
+        int j = 0;
+        int k = 0;
+        byte[] temp = (contentLength < ENCRYPTION_BLOCK_SIZE) ? new byte[contentLength] : new
+                byte[ENCRYPTION_BLOCK_SIZE];
 
         for (int i = 0; i < contentLength; i++) {
             temp[j++] = rawContent[i];
             if (j == ENCRYPTION_BLOCK_SIZE || i == (contentLength - 1)) {
                 j = 0;
-                blockChain.add(ByteString.copyFrom(encryptMessage(certificate, temp)));
+                encryptionServices.add(new EncryptionServiceImpl(certificate, true, temp, k++));
             }
         }
 
-        sBuilder.addAllContent(blockChain);
+        List<Future<ByteString>> blockChain = executorService.invokeAll(encryptionServices);
+        sBuilder.addAllContent(getProcessedMessages(blockChain));
         sBuilder.setProcessingTime(System.currentTimeMillis() - start);
         return sBuilder.build();
     }
 
     public static byte[] decryptContent(File certificate, SecureMessage.SecureMessagePacket secureMessagePacket) throws
-            DataIntegrityException, ClassNotFoundException, IOException, IllegalBlockSizeException,
-            NoSuchPaddingException, BadPaddingException, NoSuchAlgorithmException, InvalidKeyException,
-            NoSuchProviderException, SignatureException, SignatureVerificationFailureException {
+            DataIntegrityException, ClassNotFoundException, IOException, NoSuchAlgorithmException, InvalidKeyException,
+            NoSuchProviderException, SignatureException, SignatureVerificationFailureException, InterruptedException,
+            ExecutionException {
         long   listSize             = secureMessagePacket.getContentLength();
         byte[] reconstructedContent = new byte[(int) listSize];
 
-        List<byte[]> contentList          = new ArrayList<>();
-        int          encryptedContentSize = secureMessagePacket.getContentList().size();
+        int                       encryptedContentSize = secureMessagePacket.getContentList().size();
+        ExecutorService           executorService      = Executors.newFixedThreadPool(encryptedContentSize);
+        List<byte[]>              contentList          = new ArrayList<>(encryptedContentSize);
+        List<IsEncryptionService> decryptServices      = new ArrayList<>(encryptedContentSize);
+
         for (int i = 0; i < encryptedContentSize; i++) {
-            contentList.add(decryptMessage(certificate, secureMessagePacket.getContentList().get(i).toByteArray()));
+            decryptServices.add(new EncryptionServiceImpl(certificate, false, secureMessagePacket.getContentList().get
+                    (i).toByteArray(), i));
+        }
+
+        List<Future<ByteString>> decryptResults = executorService.invokeAll(decryptServices);
+        for (Future<ByteString> byteStringFuture : decryptResults) {
+            contentList.add(byteStringFuture.get().toByteArray());
         }
 
         int i = 0;
@@ -161,5 +171,15 @@ public class EncryptionUtil {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(content);
         return digest.digest();
+    }
+
+    private static List<ByteString> getProcessedMessages(List<Future<ByteString>> service) throws ExecutionException,
+            InterruptedException {
+        List<ByteString> processedMessages = new ArrayList<>(service.size());
+        int              i                 = 0;
+        for (Future<ByteString> serviceFuture : service) {
+            processedMessages.add(i, serviceFuture.get());
+        }
+        return processedMessages;
     }
 }
