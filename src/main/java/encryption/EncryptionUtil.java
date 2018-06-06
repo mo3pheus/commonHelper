@@ -2,7 +2,8 @@ package encryption;
 
 import certificates.RsaSecureComsCertificate;
 import com.google.protobuf.ByteString;
-import org.slf4j.Logger;
+import exceptions.DataIntegrityException;
+import exceptions.SignatureVerificationFailureException;
 import space.exploration.communications.protocol.security.SecureMessage;
 
 import javax.crypto.BadPaddingException;
@@ -12,6 +13,7 @@ import javax.crypto.NoSuchPaddingException;
 import java.io.*;
 import java.security.*;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class EncryptionUtil {
@@ -92,13 +94,20 @@ public class EncryptionUtil {
         int              numBlocks  = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
         List<ByteString> blockChain = new ArrayList<>(numBlocks);
         int              j          = 0;
+
+        byte[] temp = null;
+        if (contentLength < ENCRYPTION_BLOCK_SIZE) {
+            temp = new byte[contentLength];
+        } else {
+            temp = new byte[ENCRYPTION_BLOCK_SIZE];
+        }
+
         for (int i = 0; i < contentLength; i++) {
-            byte[] temp = new byte[ENCRYPTION_BLOCK_SIZE];
             temp[j++] = rawContent[i];
-            if (j == ENCRYPTION_BLOCK_SIZE) {
+            if (j == ENCRYPTION_BLOCK_SIZE || i == (contentLength - 1)) {
                 j = 0;
+                blockChain.add(ByteString.copyFrom(encryptMessage(certificate, temp)));
             }
-            blockChain.add(ByteString.copyFrom(encryptMessage(certificate, temp)));
         }
 
         sBuilder.addAllContent(blockChain);
@@ -106,48 +115,50 @@ public class EncryptionUtil {
         return sBuilder.build();
     }
 
-    public static byte[] decryptContent(File certificate, SecureMessage.SecureMessagePacket secureMessagePacket,
-                                        Logger logger) throws
+    public static byte[] decryptContent(File certificate, SecureMessage.SecureMessagePacket secureMessagePacket) throws
             DataIntegrityException, ClassNotFoundException, IOException, IllegalBlockSizeException,
             NoSuchPaddingException, BadPaddingException, NoSuchAlgorithmException, InvalidKeyException,
-            NoSuchProviderException, SignatureException {
-        RsaSecureComsCertificate comsCertificate      = extractCertificate(certificate);
-        long                     listSize             = secureMessagePacket.getContentLength();
-        byte[]                   reconstructedContent = new byte[(int) listSize];
+            NoSuchProviderException, SignatureException, SignatureVerificationFailureException {
+        long   listSize             = secureMessagePacket.getContentLength();
+        byte[] reconstructedContent = new byte[(int) listSize];
 
-        List<byte[]> contentList = new ArrayList<>(secureMessagePacket.getContentList().size());
-        for (int i = 0; i < contentList.size(); i++) {
-            contentList.add(decryptMessage(certificate, contentList.get(i).clone()));
+        List<byte[]> contentList          = new ArrayList<>();
+        int          encryptedContentSize = secureMessagePacket.getContentList().size();
+        for (int i = 0; i < encryptedContentSize; i++) {
+            contentList.add(decryptMessage(certificate, secureMessagePacket.getContentList().get(i).toByteArray()));
         }
 
         int i = 0;
         for (byte[] temp : contentList) {
             for (int j = 0; j < temp.length; j++) {
                 reconstructedContent[i++] = temp[j];
+                if (i == listSize) {
+                    break;
+                }
             }
         }
 
-        if (!verifyContentIntegrity(secureMessagePacket)) {
+        if (!verifyContentIntegrity(secureMessagePacket, reconstructedContent)) {
             throw new DataIntegrityException("Content checkSum failed. SenderId = " + secureMessagePacket.getSenderId
                     ());
         }
 
         if (!verifyMessage(certificate, secureMessagePacket.getSignature().toByteArray(), reconstructedContent)) {
-            logger.error("Message verification failed.");
-            return null;
+            throw new SignatureVerificationFailureException("Signature verification failed for senderId = " +
+                                                                    secureMessagePacket.getSenderId());
         }
 
         return reconstructedContent;
     }
 
-    public static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket) {
-
-
-        return false;
+    public static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket, byte[]
+            rawContent) throws NoSuchAlgorithmException {
+        byte[] hash = generateHash(rawContent);
+        return Arrays.equals(hash, secureMessagePacket.getCheckSum().toByteArray());
     }
 
     private static byte[] generateHash(byte[] content) throws NoSuchAlgorithmException {
-        MessageDigest digest = MessageDigest.getInstance("SHA256");
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(content);
         return digest.digest();
     }
