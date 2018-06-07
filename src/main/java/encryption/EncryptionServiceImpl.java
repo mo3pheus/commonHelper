@@ -1,6 +1,6 @@
 package encryption;
 
-import com.google.protobuf.ByteString;
+import domain.SecureResult;
 
 import java.io.File;
 
@@ -18,17 +18,17 @@ public class EncryptionServiceImpl implements IsEncryptionService {
     }
 
     @Override
-    public ByteString encrypt() throws Exception {
-        return ByteString.copyFrom(EncryptionUtil.encryptMessage(certificate, content));
+    public SecureResult encrypt() throws Exception {
+        return new SecureResult(EncryptionUtil.encryptMessage(certificate, content), blockId);
     }
 
     @Override
-    public ByteString decrypt() throws Exception {
-        return ByteString.copyFrom(EncryptionUtil.decryptMessage(certificate, content));
+    public SecureResult decrypt() throws Exception {
+        return new SecureResult(EncryptionUtil.decryptMessage(certificate, content), blockId);
     }
 
     @Override
-    public ByteString call() throws Exception {
+    public SecureResult call() throws Exception {
         Thread.currentThread().setName("encrypt(" + encrypt + ")_" + Integer.toString(blockId));
         return (encrypt) ? encrypt() : decrypt();
     }

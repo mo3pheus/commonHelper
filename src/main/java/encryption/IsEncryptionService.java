@@ -1,11 +1,11 @@
 package encryption;
 
-import com.google.protobuf.ByteString;
+import domain.SecureResult;
 
 import java.util.concurrent.Callable;
 
-public interface IsEncryptionService extends Callable<ByteString> {
-    ByteString encrypt() throws Exception;
+public interface IsEncryptionService extends Callable<SecureResult> {
+    SecureResult encrypt() throws Exception;
 
-    ByteString decrypt() throws Exception;
+    SecureResult decrypt() throws Exception;
 }

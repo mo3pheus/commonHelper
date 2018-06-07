@@ -2,6 +2,7 @@ package encryption;
 
 import certificates.RsaSecureComsCertificate;
 import com.google.protobuf.ByteString;
+import domain.SecureResult;
 import exceptions.DataIntegrityException;
 import exceptions.SignatureVerificationFailureException;
 import space.exploration.communications.protocol.security.SecureMessage;
@@ -82,7 +83,8 @@ public class EncryptionUtil {
         return cipher.doFinal(encryptedContent);
     }
 
-    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent)
+    public synchronized static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate,
+                                                                             byte[] rawContent)
             throws Exception {
         long                                      start         = System.currentTimeMillis();
         SecureMessage.SecureMessagePacket.Builder sBuilder      = SecureMessage.SecureMessagePacket.newBuilder();
@@ -111,51 +113,66 @@ public class EncryptionUtil {
             }
         }
 
-        List<Future<ByteString>> blockChain = executorService.invokeAll(encryptionServices);
-        sBuilder.addAllContent(getProcessedMessages(blockChain));
+        List<Future<SecureResult>> secureResults = executorService.invokeAll(encryptionServices);
+        SecureResult[]             results       = new SecureResult[numBlocks];
+        for (Future<SecureResult> secureResultFuture : secureResults) {
+            SecureResult secureResult = secureResultFuture.get();
+            results[secureResult.getBlockId()] = secureResult;
+        }
+
+        List<ByteString> blockchain = new ArrayList<>();
+        for (int i = 0; i < results.length; i++) {
+            blockchain.add(ByteString.copyFrom(results[i].getContent()));
+        }
+
+        sBuilder.addAllContent(blockchain);
         sBuilder.setProcessingTime(System.currentTimeMillis() - start);
         return sBuilder.build();
     }
 
-    public static byte[] decryptContent(File certificate, SecureMessage.SecureMessagePacket secureMessagePacket) throws
-            DataIntegrityException, ClassNotFoundException, IOException, NoSuchAlgorithmException, InvalidKeyException,
-            NoSuchProviderException, SignatureException, SignatureVerificationFailureException, InterruptedException,
-            ExecutionException {
-        long   listSize             = secureMessagePacket.getContentLength();
-        byte[] reconstructedContent = new byte[(int) listSize];
+    public synchronized static byte[] decryptContent(File certificate, SecureMessage.SecureMessagePacket
+            secureMessagePacket) throws
+            Exception {
+        byte[]           reconstructedContent = new byte[(int) secureMessagePacket.getContentLength()];
+        List<ByteString> encryptedContent     = secureMessagePacket.getContentList();
 
-        int                       encryptedContentSize = secureMessagePacket.getContentList().size();
-        ExecutorService           executorService      = Executors.newFixedThreadPool(encryptedContentSize);
-        List<byte[]>              contentList          = new ArrayList<>(encryptedContentSize);
-        List<IsEncryptionService> decryptServices      = new ArrayList<>(encryptedContentSize);
-
-        for (int i = 0; i < encryptedContentSize; i++) {
-            decryptServices.add(i, new EncryptionServiceImpl(certificate, false, secureMessagePacket.getContentList()
-                    .get(i).toByteArray(), i));
+        List<IsEncryptionService> decryptionTasks = new ArrayList<>();
+        for (int i = 0; i < encryptedContent.size(); i++) {
+            ByteString encryptedByteString = encryptedContent.get(i);
+            IsEncryptionService temp = new EncryptionServiceImpl(certificate, false,
+                                                                 encryptedByteString.toByteArray(), i);
+            decryptionTasks.add(temp);
         }
 
-        List<Future<ByteString>> decryptResults = executorService.invokeAll(decryptServices);
-        contentList = convertByteStringList(getProcessedMessages(decryptResults));
+        List<Future<SecureResult>> decryptionResults = (Executors.newFixedThreadPool(secureMessagePacket
+                                                                                             .getContentList().size()
+        )).invokeAll(decryptionTasks);
 
-        int i = 0;
-        for (byte[] temp : contentList) {
-            for (int j = 0; j < temp.length; j++) {
-                reconstructedContent[i++] = temp[j];
-                if (i == listSize) {
+        SecureResult[] decryptedContent = new SecureResult[secureMessagePacket.getContentList().size()];
+        for (Future<SecureResult> resultFuture : decryptionResults) {
+            SecureResult temp = resultFuture.get();
+            decryptedContent[temp.getBlockId()] = temp;
+        }
+
+        int j = 0;
+        for (int i = 0; i < decryptedContent.length; i++) {
+            byte[] current = decryptedContent[i].getContent();
+            for (byte singleByte : current) {
+                reconstructedContent[j++] = singleByte;
+                if (j == secureMessagePacket.getContentLength()) {
                     break;
                 }
             }
         }
 
-        if (!verifyContentIntegrity(secureMessagePacket, reconstructedContent)) {
-            throw new DataIntegrityException("Content checkSum failed. SenderId = " + secureMessagePacket.getSenderId
-                    ());
-        }
-
-        if (!verifyMessage(certificate, secureMessagePacket.getSignature().toByteArray(), reconstructedContent)) {
-            throw new SignatureVerificationFailureException("Signature verification failed for senderId = " +
-                                                                    secureMessagePacket.getSenderId());
-        }
+//        if (!verifyContentIntegrity(secureMessagePacket, reconstructedContent)) {
+//            throw new Exception("Content integrity not verified, checksum mismatch");
+//        }
+//
+//        if (!verifyMessage(certificate, secureMessagePacket.getSignature().toByteArray(), reconstructedContent)) {
+//            throw new Exception("Content could not be verified with given sender. " + secureMessagePacket.getSenderId
+//                    ());
+//        }
 
         return reconstructedContent;
     }
@@ -170,24 +187,5 @@ public class EncryptionUtil {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(content);
         return digest.digest();
-    }
-
-    private static List<ByteString> getProcessedMessages(List<Future<ByteString>> service) throws ExecutionException,
-            InterruptedException {
-        List<ByteString> processedMessages = new ArrayList<>(service.size());
-        int              i                 = 0;
-        for (Future<ByteString> serviceFuture : service) {
-            ByteString bytes = serviceFuture.get();
-            processedMessages.add(i, bytes);
-        }
-        return processedMessages;
-    }
-
-    private static List<byte[]> convertByteStringList(List<ByteString> input) {
-        List<byte[]> temp = new ArrayList<>();
-        for (ByteString bytes : input) {
-            temp.add(bytes.toByteArray());
-        }
-        return temp;
     }
 }

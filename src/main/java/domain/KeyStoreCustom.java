@@ -1,4 +1,4 @@
-package encryption;
+package domain;
 
 import java.io.Serializable;
 import java.security.KeyPair;
