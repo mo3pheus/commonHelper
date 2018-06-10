@@ -151,8 +151,9 @@ public class EncryptionUtil {
         }
     }
 
-    public synchronized static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket, byte[]
-            rawContent) throws NoSuchAlgorithmException {
+    public synchronized static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket,
+                                                              byte[]
+                                                                      rawContent) throws NoSuchAlgorithmException {
         byte[] hash = generateHash(rawContent);
         return Arrays.equals(hash, secureMessagePacket.getCheckSum().toByteArray());
     }
@@ -220,8 +221,9 @@ public class EncryptionUtil {
         for (int j = 0; j < contentLength; j++) {
             temp[i++] = rawContent[j];
 
-            if (i == blockSize || j == contentLength) {
+            if (i == blockSize || j == contentLength - 1) {
                 inputChunks.add(temp);
+                temp = new byte[blockSize];
                 i = 0;
             }
         }

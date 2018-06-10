@@ -1,22 +1,22 @@
 package encryption;
 
 import com.google.protobuf.ByteString;
-import com.sun.xml.internal.messaging.saaj.util.ByteInputStream;
 import junit.framework.TestCase;
 import org.junit.Ignore;
 import space.exploration.communications.protocol.communication.RoverStatusOuterClass;
+import space.exploration.communications.protocol.propulsion.TelemetryDataOuterClass;
 import space.exploration.communications.protocol.security.SecureMessage;
-import sun.misc.IOUtils;
 
-import java.io.ByteArrayInputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 import org.junit.Test;
 
 public class EncryptionOperationsTest extends TestCase {
-
+    final String SEPARATOR      = "=============================================================================";
+    final String THIN_SEPARATOR = "-----------------------------------------------------------------------------";
     File                              clientCertificate   = new File("src/main/resources/encryptionKeys/client.ser");
     File                              serverCertificate   = new File("src/main/resources/encryptionKeys/server.ser");
     File                              imageFile           = new File("src/main/resources/data/telemetry.ser");
@@ -26,14 +26,9 @@ public class EncryptionOperationsTest extends TestCase {
     @Override
     public void setUp() throws IOException {
         RoverStatusOuterClass.RoverStatus.Builder rBuilder = RoverStatusOuterClass.RoverStatus.newBuilder();
-
         rBuilder.setSolNumber(100);
-
-        FileInputStream fileInputStream = new FileInputStream(imageFile);
-        byte[] content = null;
-
-
-
+        byte[] content = Files.readAllBytes(Paths.get(imageFile.getPath()));
+        rBuilder.setModuleMessage(ByteString.copyFrom(content));
         rBuilder.setNotes("This is a test with a secret message.");
         roverStatus = rBuilder.build();
     }
@@ -59,11 +54,18 @@ public class EncryptionOperationsTest extends TestCase {
     public void testNewDataEncryption() {
         try {
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate, roverStatus.toByteArray());
-            byte[]                            decryptedContent = EncryptionUtil.decryptSecureMessage
+            byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
                     (clientCertificate, secureMessagePacket);
-            RoverStatusOuterClass.RoverStatus roverStatus      = RoverStatusOuterClass.RoverStatus.parseFrom
+            RoverStatusOuterClass.RoverStatus roverStatus = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
+            System.out.println(SEPARATOR);
             System.out.println(roverStatus);
+            TelemetryDataOuterClass.TelemetryData telemetryData = TelemetryDataOuterClass.TelemetryData.parseFrom
+                    (roverStatus.getModuleMessage().toByteArray());
+            System.out.println(THIN_SEPARATOR);
+            System.out.println(telemetryData);
+            System.out.println(THIN_SEPARATOR);
+            System.out.println(SEPARATOR);
         } catch (Exception e) {
             e.printStackTrace();
         }

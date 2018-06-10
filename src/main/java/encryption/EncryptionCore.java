@@ -11,16 +11,19 @@ public class EncryptionCore implements Callable<SecureResult> {
     private SecureResult result          = null;
     private File         comsCertificate = null;
     private int          blockId         = 0;
+    private String       operation       = "";
 
     public EncryptionCore(File comsCertificate, byte[] input, boolean encrypt, int blockId) {
         this.input = input;
         this.encrypt = encrypt;
         this.comsCertificate = comsCertificate;
         this.blockId = blockId;
+        operation = (encrypt) ? "encryptionCore_" : "decryptionCore_";
     }
 
     @Override
     public SecureResult call() throws Exception {
+        Thread.currentThread().setName(operation + blockId);
         byte[] output = (encrypt) ? EncryptionUtil.encryptMessage(comsCertificate, input) : EncryptionUtil
                 .decryptMessage(comsCertificate, input);
         result = new SecureResult(output, blockId);
