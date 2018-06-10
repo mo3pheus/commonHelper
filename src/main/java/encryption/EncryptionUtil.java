@@ -2,6 +2,7 @@ package encryption;
 
 import certificates.RsaSecureComsCertificate;
 import com.google.protobuf.ByteString;
+import domain.SecureResult;
 import exceptions.DataIntegrityException;
 import exceptions.SignatureVerificationFailureException;
 import space.exploration.communications.protocol.security.SecureMessage;
@@ -15,11 +16,15 @@ import java.security.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class EncryptionUtil {
     public static final int ENCRYPTION_BLOCK_SIZE = 2000;
 
-    private static RsaSecureComsCertificate extractCertificate(File certFile) throws IOException,
+    public synchronized static RsaSecureComsCertificate extractCertificate(File certFile) throws IOException,
             ClassNotFoundException {
         FileInputStream          fileInputStream   = new FileInputStream(certFile);
         ObjectInputStream        objectInputStream = new ObjectInputStream(fileInputStream);
@@ -27,7 +32,7 @@ public class EncryptionUtil {
         return comsCertificate;
     }
 
-    public static boolean verifyMessage(File certificate, byte[] signatureToVerify, byte[] content)
+    public synchronized static boolean verifyMessage(File certificate, byte[] signatureToVerify, byte[] content)
             throws InvalidKeyException, IOException, SignatureException, ClassNotFoundException,
             NoSuchProviderException, NoSuchAlgorithmException {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
@@ -47,7 +52,7 @@ public class EncryptionUtil {
         return signature.verify(signatureToVerify);
     }
 
-    public static byte[] signMessage(File certificate, byte[] encryptedContent) throws Exception {
+    public synchronized static byte[] signMessage(File certificate, byte[] encryptedContent) throws Exception {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
         Signature                dsa             = Signature.getInstance("SHA1withDSA", "SUN");
         dsa.initSign(comsCertificate.getSignaturePrvKey());
@@ -64,14 +69,15 @@ public class EncryptionUtil {
         return signature;
     }
 
-    public static byte[] encryptMessage(File certificate, byte[] rawContent) throws Exception {
+    public synchronized static byte[] encryptMessage(File certificate, byte[] rawContent) throws Exception {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
         Cipher                   cipher          = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.ENCRYPT_MODE, comsCertificate.getMessagePubKey());
         return cipher.doFinal(rawContent);
     }
 
-    public static byte[] decryptMessage(File certificate, byte[] encryptedContent) throws ClassNotFoundException,
+    public synchronized static byte[] decryptMessage(File certificate, byte[] encryptedContent) throws
+            ClassNotFoundException,
             NoSuchAlgorithmException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException,
             NoSuchPaddingException, IOException {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
@@ -90,31 +96,12 @@ public class EncryptionUtil {
         sBuilder.setSignature(ByteString.copyFrom(signMessage(certificate, rawContent)));
         sBuilder.setSenderId(senderId);
         sBuilder.setCheckSum(ByteString.copyFrom(generateHash(rawContent)));
-
-        int              numBlocks  = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
-        List<ByteString> blockChain = new ArrayList<>(numBlocks);
-        int              j          = 0;
-
-        byte[] temp = null;
-        if (contentLength < ENCRYPTION_BLOCK_SIZE) {
-            temp = new byte[contentLength];
-        } else {
-            temp = new byte[ENCRYPTION_BLOCK_SIZE];
-        }
-
-        for (int i = 0; i < contentLength; i++) {
-            temp[j++] = rawContent[i];
-            if (j == ENCRYPTION_BLOCK_SIZE || i == (contentLength - 1)) {
-                j = 0;
-                blockChain.add(ByteString.copyFrom(encryptMessage(certificate, temp)));
-            }
-        }
-
-        sBuilder.addAllContent(blockChain);
+        sBuilder.addAllContent(cutAndBoxData(certificate, contentLength, rawContent));
         sBuilder.setProcessingTime(System.currentTimeMillis() - start);
         return sBuilder.build();
     }
 
+    @Deprecated
     public static byte[] decryptContent(File certificate, SecureMessage.SecureMessagePacket secureMessagePacket) throws
             DataIntegrityException, ClassNotFoundException, IOException, IllegalBlockSizeException,
             NoSuchPaddingException, BadPaddingException, NoSuchAlgorithmException, InvalidKeyException,
@@ -151,15 +138,114 @@ public class EncryptionUtil {
         return reconstructedContent;
     }
 
-    public static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket, byte[]
+    public static byte[] decryptSecureMessage(File certificate, SecureMessage.SecureMessagePacket
+            secureMessagePacket) throws Exception {
+        List<byte[]> decryptedContent = unpackAndDecryptData(certificate, secureMessagePacket);
+        byte[]       rawData          = stitchData(decryptedContent, (int) secureMessagePacket.getContentLength());
+        if (verifyContentIntegrity(secureMessagePacket, rawData) && verifyMessage(certificate, secureMessagePacket
+                .getSignature().toByteArray(), rawData)) {
+            return rawData;
+        } else {
+            throw new Exception("Data integrity check failed. Unable to decrypt data. Sender id = " +
+                                        secureMessagePacket.getSenderId());
+        }
+    }
+
+    public synchronized static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket, byte[]
             rawContent) throws NoSuchAlgorithmException {
         byte[] hash = generateHash(rawContent);
         return Arrays.equals(hash, secureMessagePacket.getCheckSum().toByteArray());
     }
 
-    private static byte[] generateHash(byte[] content) throws NoSuchAlgorithmException {
+    private synchronized static byte[] stitchData(List<byte[]> dataBlocks, int contentLength) {
+        int    i            = 0;
+        byte[] stitchedData = new byte[contentLength];
+
+        for (byte[] temp : dataBlocks) {
+            for (int j = 0; j < temp.length; j++) {
+                stitchedData[i++] = temp[j];
+                if (i == contentLength) {
+                    break;
+                }
+            }
+        }
+        return stitchedData;
+    }
+
+    private synchronized static byte[] generateHash(byte[] content) throws NoSuchAlgorithmException {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(content);
         return digest.digest();
+    }
+
+    private static List<byte[]> unpackAndDecryptData(File certificate, SecureMessage.SecureMessagePacket
+            secureMessagePacket) throws ExecutionException, InterruptedException {
+        int          numBlocks           = secureMessagePacket.getContentList().size();
+        List<byte[]> encryptedBlockChain = new ArrayList<>();
+        for (ByteString bytes : secureMessagePacket.getContentList()) {
+            encryptedBlockChain.add(bytes.toByteArray());
+        }
+
+        List<EncryptionCore> decryptionTasks = new ArrayList<>();
+        for (int i = 0; i < encryptedBlockChain.size(); i++) {
+            EncryptionCore decryptCore = new EncryptionCore(certificate, encryptedBlockChain.get(i), false, i);
+            decryptionTasks.add(decryptCore);
+        }
+
+        ExecutorService            decryptionService = Executors.newFixedThreadPool(numBlocks);
+        List<Future<SecureResult>> futureList        = decryptionService.invokeAll(decryptionTasks);
+        SecureResult[]             results           = new SecureResult[numBlocks];
+        for (Future<SecureResult> future : futureList) {
+            SecureResult result = future.get();
+            results[result.getBlockId()] = result;
+        }
+
+        List<byte[]> decryptedContent = new ArrayList<>();
+        for (SecureResult result : results) {
+            decryptedContent.add(result.getData());
+        }
+
+        return decryptedContent;
+    }
+
+    private static List<ByteString> cutAndBoxData(File certificate, int contentLength, byte[] rawContent) throws
+            InterruptedException, ExecutionException {
+        int numBlocks = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
+
+        int          blockSize   = (numBlocks > 1) ? ENCRYPTION_BLOCK_SIZE : contentLength;
+        List<byte[]> inputChunks = new ArrayList<>();
+        int          i           = 0;
+        byte[]       temp        = new byte[blockSize];
+
+        for (int j = 0; j < contentLength; j++) {
+            temp[i++] = rawContent[j];
+
+            if (i == blockSize || j == contentLength) {
+                inputChunks.add(temp);
+                i = 0;
+            }
+        }
+
+        SecureResult[]             results           = new SecureResult[numBlocks];
+        List<ByteString>           encryptedContents = new ArrayList<>();
+        List<Future<SecureResult>> futureList        = new ArrayList<>();
+        List<EncryptionCore>       cryptoTasks       = new ArrayList<>();
+        for (i = 0; i < numBlocks; i++) {
+            cryptoTasks.add(new EncryptionCore(certificate, inputChunks.get(i), true, i));
+        }
+
+        ExecutorService encryptionService = Executors.newFixedThreadPool(numBlocks);
+        futureList = encryptionService.invokeAll(cryptoTasks);
+
+        for (Future<SecureResult> future : futureList) {
+            SecureResult result = future.get();
+            results[result.getBlockId()] = result;
+        }
+
+        for (i = 0; i < results.length; i++) {
+            encryptedContents.add(ByteString.copyFrom(results[i].getData()));
+        }
+
+        return encryptedContents;
     }
 }

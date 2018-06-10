@@ -1,6 +1,5 @@
 package bootstrap;
 
-import encryption.KeyStoreCustom;
 import encryption.KeyStoreUtil;
 import util.LoggerUtil;
 import util.TrackedLogger;
