@@ -33,15 +33,17 @@ public class EncryptionOperationsTest extends TestCase {
         roverStatus = rBuilder.build();
     }
 
-    @Ignore
+    @Test
     public void testEncryptionData() {
         try {
+            long start = System.currentTimeMillis();
             secureMessagePacket = EncryptionUtil.encryptData("Server",
                                                              serverCertificate,
                                                              roverStatus
                                                                      .toByteArray());
             byte[] decryptedContent = EncryptionUtil.decryptContent(clientCertificate,
                                                                     secureMessagePacket);
+            System.out.println("Time taken for old decryption = " + (System.currentTimeMillis() - start));
             RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
             assertTrue(roverStatusNew.equals(roverStatus));
@@ -53,19 +55,22 @@ public class EncryptionOperationsTest extends TestCase {
     @Test
     public void testNewDataEncryption() {
         try {
+            long start = System.currentTimeMillis();
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate, roverStatus.toByteArray());
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
                     (clientCertificate, secureMessagePacket);
-            RoverStatusOuterClass.RoverStatus roverStatus = RoverStatusOuterClass.RoverStatus.parseFrom
+            System.out.println("Time taken for new decryption = " + (System.currentTimeMillis() - start));
+            RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
             System.out.println(SEPARATOR);
-            System.out.println(roverStatus);
+            //System.out.println(roverStatus);
             TelemetryDataOuterClass.TelemetryData telemetryData = TelemetryDataOuterClass.TelemetryData.parseFrom
                     (roverStatus.getModuleMessage().toByteArray());
             System.out.println(THIN_SEPARATOR);
-            System.out.println(telemetryData);
+            //System.out.println(telemetryData);
             System.out.println(THIN_SEPARATOR);
             System.out.println(SEPARATOR);
+            assertTrue(roverStatusNew.equals(roverStatus));
         } catch (Exception e) {
             e.printStackTrace();
         }

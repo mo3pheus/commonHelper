@@ -1,17 +1,19 @@
 package encryption;
 
 import domain.SecureResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.concurrent.Callable;
 
 public class EncryptionCore implements Callable<SecureResult> {
-    private boolean      encrypt         = false;
-    private byte[]       input           = null;
-    private SecureResult result          = null;
-    private File         comsCertificate = null;
-    private int          blockId         = 0;
-    private String       operation       = "";
+    private Logger  logger          = LoggerFactory.getLogger(EncryptionCore.class);
+    private boolean encrypt         = false;
+    private byte[]  input           = null;
+    private File    comsCertificate = null;
+    private int     blockId         = 0;
+    private String  operation       = "";
 
     public EncryptionCore(File comsCertificate, byte[] input, boolean encrypt, int blockId) {
         this.input = input;
@@ -24,13 +26,13 @@ public class EncryptionCore implements Callable<SecureResult> {
     @Override
     public SecureResult call() throws Exception {
         Thread.currentThread().setName(operation + blockId);
-        byte[] output = (encrypt) ? EncryptionUtil.encryptMessage(comsCertificate, input) : EncryptionUtil
-                .decryptMessage(comsCertificate, input);
-        result = new SecureResult(output, blockId);
-        return result;
-    }
-
-    public SecureResult getResult(){
-        return result;
+        byte[] output = null;
+        try {
+            output = (encrypt) ? EncryptionUtil.encryptMessage(comsCertificate, input) : EncryptionUtil
+                    .decryptMessage(comsCertificate, input);
+        } catch (Exception e) {
+            logger.error("Exception while encrypt = " + encrypt + " id = " + blockId, e);
+        }
+        return new SecureResult(output, blockId);
     }
 }
