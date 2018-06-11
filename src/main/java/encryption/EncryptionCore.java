@@ -29,4 +29,8 @@ public class EncryptionCore implements Callable<SecureResult> {
         result = new SecureResult(output, blockId);
         return result;
     }
+
+    public SecureResult getResult(){
+        return result;
+    }
 }

@@ -193,9 +193,12 @@ public class EncryptionUtil {
             decryptionTasks.add(decryptCore);
         }
 
-        ExecutorService            decryptionService = Executors.newFixedThreadPool(numBlocks);
-        List<Future<SecureResult>> futureList        = decryptionService.invokeAll(decryptionTasks);
-        SecureResult[]             results           = new SecureResult[numBlocks];
+        List<Future<SecureResult>> futureList = new ArrayList<>(numBlocks);
+        SecureResult[]             results    = new SecureResult[numBlocks];
+
+        ExecutorService decryptionService = Executors.newFixedThreadPool(numBlocks);
+        futureList = decryptionService.invokeAll(decryptionTasks);
+
         for (Future<SecureResult> future : futureList) {
             SecureResult result = future.get();
             results[result.getBlockId()] = result;
@@ -206,6 +209,7 @@ public class EncryptionUtil {
             decryptedContent.add(result.getData());
         }
 
+        decryptionService.shutdown();
         return decryptedContent;
     }
 
@@ -248,6 +252,7 @@ public class EncryptionUtil {
             encryptedContents.add(ByteString.copyFrom(results[i].getData()));
         }
 
+        encryptionService.shutdown();
         return encryptedContents;
     }
 }

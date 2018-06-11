@@ -7,6 +7,7 @@ import util.UUIdSingleton;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Properties;
 
 public class Driver {
@@ -15,18 +16,14 @@ public class Driver {
 
     public static Properties projectProperties = new Properties();
 
-    public static void main(String[] args) {
+    public static void main1(String[] args) {
         try {
             LoggerUtil.configureConsoleLogging(Boolean.parseBoolean(args[0]), UUIdSingleton.getInstance().uuid);
             TrackedLogger logger = new TrackedLogger(Driver.class);
             logger.info(" Project properties are loaded. Log file generated for this run = ");
             projectProperties = getProjectProperties(args[1]);
-            //KeyStoreUtil.saveSignatureKeyObject();
-            //KeyStoreUtil.saveRsaKeyObject();
-            //KeyStoreUtil.testKeyStore(args);
-            //KeyStoreUtil.testRsaEncryption();
             KeyStoreUtil.testRsaEncryptionProtobuf();
-        }  catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
