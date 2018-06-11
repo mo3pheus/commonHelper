@@ -84,7 +84,7 @@ public class EncryptionUtil {
         return cipher.doFinal(encryptedContent);
     }
 
-    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent)
+    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent, long waitMinutes)
             throws Exception {
         long                                      start         = System.currentTimeMillis();
         SecureMessage.SecureMessagePacket.Builder sBuilder      = SecureMessage.SecureMessagePacket.newBuilder();
@@ -93,51 +93,14 @@ public class EncryptionUtil {
         sBuilder.setSignature(ByteString.copyFrom(signMessage(certificate, rawContent)));
         sBuilder.setSenderId(senderId);
         sBuilder.setCheckSum(ByteString.copyFrom(generateHash(rawContent)));
-        sBuilder.addAllContent(cutAndBoxData(certificate, contentLength, rawContent));
+        sBuilder.addAllContent(cutAndBoxData(certificate, contentLength, rawContent, waitMinutes));
         sBuilder.setProcessingTime(System.currentTimeMillis() - start);
         return sBuilder.build();
     }
 
-    @Deprecated
-    public static byte[] decryptContent(File certificate, SecureMessage.SecureMessagePacket secureMessagePacket) throws
-            DataIntegrityException, ClassNotFoundException, IOException, IllegalBlockSizeException,
-            NoSuchPaddingException, BadPaddingException, NoSuchAlgorithmException, InvalidKeyException,
-            NoSuchProviderException, SignatureException, SignatureVerificationFailureException {
-        long   listSize             = secureMessagePacket.getContentLength();
-        byte[] reconstructedContent = new byte[(int) listSize];
-
-        List<byte[]> contentList          = new ArrayList<>();
-        int          encryptedContentSize = secureMessagePacket.getContentList().size();
-        for (int i = 0; i < encryptedContentSize; i++) {
-            contentList.add(decryptMessage(certificate, secureMessagePacket.getContentList().get(i).toByteArray()));
-        }
-
-        int i = 0;
-        for (byte[] temp : contentList) {
-            for (int j = 0; j < temp.length; j++) {
-                reconstructedContent[i++] = temp[j];
-                if (i == listSize) {
-                    break;
-                }
-            }
-        }
-
-        if (!verifyContentIntegrity(secureMessagePacket, reconstructedContent)) {
-            throw new DataIntegrityException("Content checkSum failed. SenderId = " + secureMessagePacket.getSenderId
-                    ());
-        }
-
-        if (!verifyMessage(certificate, secureMessagePacket.getSignature().toByteArray(), reconstructedContent)) {
-            throw new SignatureVerificationFailureException("Signature verification failed for senderId = " +
-                                                                    secureMessagePacket.getSenderId());
-        }
-
-        return reconstructedContent;
-    }
-
     public static byte[] decryptSecureMessage(File certificate, SecureMessage.SecureMessagePacket
-            secureMessagePacket) throws Exception {
-        byte[][] decryptedContent = unpackAndDecryptData(certificate, secureMessagePacket);
+            secureMessagePacket, long waitMinutes) throws Exception {
+        byte[][] decryptedContent = unpackAndDecryptData(certificate, secureMessagePacket, waitMinutes);
         byte[]   rawData          = stitchData(decryptedContent, (int) secureMessagePacket.getContentLength());
         if (verifyContentIntegrity(secureMessagePacket, rawData) && verifyMessage(certificate, secureMessagePacket
                 .getSignature().toByteArray(), rawData)) {
@@ -177,7 +140,7 @@ public class EncryptionUtil {
     }
 
     private static byte[][] unpackAndDecryptData(File certificate, SecureMessage.SecureMessagePacket
-            secureMessagePacket) throws ExecutionException, InterruptedException {
+            secureMessagePacket, long waitMinutes) throws ExecutionException, InterruptedException {
         int numBlocks = secureMessagePacket.getContentList().size();
 
         List<byte[]> encryptedBlockChain = new ArrayList<>();
@@ -194,7 +157,7 @@ public class EncryptionUtil {
         ExecutorService            decryptionService = Executors.newFixedThreadPool(numBlocks);
         List<Future<SecureResult>> futures           = decryptionService.invokeAll(encryptionCores);
         decryptionService.shutdown();
-        decryptionService.awaitTermination(3l, TimeUnit.MINUTES);
+        decryptionService.awaitTermination(waitMinutes, TimeUnit.MINUTES);
 
         byte[][] decryptedContent = new byte[numBlocks][ENCRYPTION_BLOCK_SIZE];
         for (Future<SecureResult> future : futures) {
@@ -205,7 +168,8 @@ public class EncryptionUtil {
         return decryptedContent;
     }
 
-    private static List<ByteString> cutAndBoxData(File certificate, int contentLength, byte[] rawContent) throws
+    private static List<ByteString> cutAndBoxData(File certificate, int contentLength, byte[] rawContent, long
+            waitMinutes) throws
             InterruptedException, ExecutionException {
         int numBlocks = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
 
@@ -235,7 +199,7 @@ public class EncryptionUtil {
         ExecutorService            encryptionService = Executors.newFixedThreadPool(numBlocks);
         List<Future<SecureResult>> futures           = encryptionService.invokeAll(encryptionCores);
         encryptionService.shutdown();
-        encryptionService.awaitTermination(3l, TimeUnit.MINUTES);
+        encryptionService.awaitTermination(waitMinutes, TimeUnit.MINUTES);
 
         for (Future<SecureResult> future : futures) {
             SecureResult result = future.get();
