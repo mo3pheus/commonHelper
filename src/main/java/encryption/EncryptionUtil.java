@@ -3,8 +3,6 @@ package encryption;
 import certificates.RsaSecureComsCertificate;
 import com.google.protobuf.ByteString;
 import domain.SecureResult;
-import exceptions.DataIntegrityException;
-import exceptions.SignatureVerificationFailureException;
 import space.exploration.communications.protocol.security.SecureMessage;
 
 import javax.crypto.BadPaddingException;
@@ -13,9 +11,7 @@ import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
 import java.io.*;
 import java.security.*;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 
 public class EncryptionUtil {
@@ -84,7 +80,8 @@ public class EncryptionUtil {
         return cipher.doFinal(encryptedContent);
     }
 
-    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent, long waitMinutes)
+    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent,
+                                                                long waitMinutes)
             throws Exception {
         long                                      start         = System.currentTimeMillis();
         SecureMessage.SecureMessagePacket.Builder sBuilder      = SecureMessage.SecureMessagePacket.newBuilder();
@@ -148,23 +145,31 @@ public class EncryptionUtil {
             encryptedBlockChain.add(bytes.toByteArray());
         }
 
-        List<EncryptionCore> encryptionCores = new ArrayList<>();
+        ForkJoinPool               forkJoinPool = new ForkJoinPool();
+        List<Future<SecureResult>> futures      = new ArrayList<>();
         for (int i = 0; i < encryptedBlockChain.size(); i++) {
-            EncryptionCore decryptCore = new EncryptionCore(certificate, encryptedBlockChain.get(i), false, i);
-            encryptionCores.add(decryptCore);
+            futures.add(forkJoinPool.submit(new EncryptionCoreFJ(certificate, encryptedBlockChain.get(i), false, i)));
         }
 
-        ExecutorService            decryptionService = Executors.newFixedThreadPool(numBlocks);
-        List<Future<SecureResult>> futures           = decryptionService.invokeAll(encryptionCores);
-        decryptionService.shutdown();
-        decryptionService.awaitTermination(waitMinutes, TimeUnit.MINUTES);
+        int          count            = 0;
+        Set<Integer> completedTasks   = new HashSet<>();
+        byte[][]     decryptedContent = new byte[numBlocks][ENCRYPTION_BLOCK_SIZE];
+        while (count < futures.size()) {
+            for (Future<SecureResult> future : futures) {
+                if (future.isDone()) {
+                    SecureResult result  = future.get();
+                    int          blockId = result.getBlockId();
 
-        byte[][] decryptedContent = new byte[numBlocks][ENCRYPTION_BLOCK_SIZE];
-        for (Future<SecureResult> future : futures) {
-            SecureResult result = future.get();
-            decryptedContent[result.getBlockId()] = result.getData();
+                    if (!completedTasks.contains(blockId)) {
+                        decryptedContent[result.getBlockId()] = result.getData();
+                        count++;
+                        completedTasks.add(blockId);
+                    }
+                }
+            }
         }
 
+        forkJoinPool.shutdown();
         return decryptedContent;
     }
 
@@ -187,29 +192,37 @@ public class EncryptionUtil {
                 i = 0;
             }
         }
-
-        List<EncryptionCore> encryptionCores   = new ArrayList<>();
-        SecureResult[]       results           = new SecureResult[numBlocks];
-        List<ByteString>     encryptedContents = new ArrayList<>();
+        ForkJoinPool               forkJoinPool      = new ForkJoinPool();
+        List<Future<SecureResult>> futures           = new ArrayList<>();
+        SecureResult[]             results           = new SecureResult[numBlocks];
+        List<ByteString>           encryptedContents = new ArrayList<>();
 
         for (i = 0; i < numBlocks; i++) {
-            encryptionCores.add(new EncryptionCore(certificate, inputChunks.get(i), true, i));
+            futures.add(forkJoinPool.submit(new EncryptionCoreFJ(certificate, inputChunks.get(i), true, i)));
         }
 
-        ExecutorService            encryptionService = Executors.newFixedThreadPool(numBlocks);
-        List<Future<SecureResult>> futures           = encryptionService.invokeAll(encryptionCores);
-        encryptionService.shutdown();
-        encryptionService.awaitTermination(waitMinutes, TimeUnit.MINUTES);
+        int          count          = 0;
+        Set<Integer> completedTasks = new HashSet<>();
+        while (count < futures.size()) {
+            for (Future<SecureResult> future : futures) {
+                if (future.isDone()) {
+                    SecureResult result  = future.get();
+                    int          blockId = result.getBlockId();
 
-        for (Future<SecureResult> future : futures) {
-            SecureResult result = future.get();
-            results[result.getBlockId()] = result;
+                    if (!completedTasks.contains(blockId)) {
+                        completedTasks.add(blockId);
+                        results[blockId] = result;
+                        count++;
+                    }
+                }
+            }
         }
 
         for (i = 0; i < results.length; i++) {
             encryptedContents.add(ByteString.copyFrom(results[i].getData()));
         }
 
+        forkJoinPool.shutdown();
         return encryptedContents;
     }
 }
