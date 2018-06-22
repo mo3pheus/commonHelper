@@ -19,7 +19,8 @@ public class EncryptionOperationsTest extends TestCase {
     final String THIN_SEPARATOR = "-----------------------------------------------------------------------------";
     File                              clientCertificate   = new File("src/main/resources/encryptionKeys/client.ser");
     File                              serverCertificate   = new File("src/main/resources/encryptionKeys/server.ser");
-    File                              imageFile           = new File("src/main/resources/data/telemetry.ser");
+    File                              imageFile           = new File
+            ("src/main/resources/data/roverStatus_1529583624656.log");
     SecureMessage.SecureMessagePacket secureMessagePacket = null;
     RoverStatusOuterClass.RoverStatus roverStatus         = null;
 
@@ -40,8 +41,19 @@ public class EncryptionOperationsTest extends TestCase {
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate, roverStatus.toByteArray(), 1);
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
                     (clientCertificate, secureMessagePacket, 1);
-            System.out.println("Time taken for decryption = " + (System.currentTimeMillis() - start));
-            RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
+            System.out.println("Time taken for decryption New = " + (System.currentTimeMillis() - start));
+
+            start = System.currentTimeMillis();
+            secureMessagePacket = EncryptionUtil.encryptDataOld("Server", serverCertificate, roverStatus.toByteArray
+                    (), 1);
+            decryptedContent = EncryptionUtil.decryptSecureMessageOld
+                    (clientCertificate, secureMessagePacket, 1);
+            System.out.println("Time taken for decryption Old = " + (System.currentTimeMillis() - start));
+
+
+
+
+            /*RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
             System.out.println(SEPARATOR);
             System.out.println(roverStatus);
@@ -51,9 +63,13 @@ public class EncryptionOperationsTest extends TestCase {
             System.out.println(telemetryData);
             System.out.println(THIN_SEPARATOR);
             System.out.println(SEPARATOR);
-            assertTrue(roverStatusNew.equals(roverStatus));
+*/
+            Thread.sleep(10000);
+
+            //assertTrue(roverStatusNew.equals(roverStatus));
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
 }

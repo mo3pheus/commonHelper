@@ -95,9 +95,37 @@ public class EncryptionUtil {
         return sBuilder.build();
     }
 
+    public static SecureMessage.SecureMessagePacket encryptDataOld(String senderId, File certificate, byte[] rawContent,
+                                                                long waitMinutes)
+            throws Exception {
+        long                                      start         = System.currentTimeMillis();
+        SecureMessage.SecureMessagePacket.Builder sBuilder      = SecureMessage.SecureMessagePacket.newBuilder();
+        int                                       contentLength = rawContent.length;
+        sBuilder.setContentLength(contentLength);
+        sBuilder.setSignature(ByteString.copyFrom(signMessage(certificate, rawContent)));
+        sBuilder.setSenderId(senderId);
+        sBuilder.setCheckSum(ByteString.copyFrom(generateHash(rawContent)));
+        sBuilder.addAllContent(cutAndBoxData(certificate, contentLength, rawContent, waitMinutes));
+        sBuilder.setProcessingTime(System.currentTimeMillis() - start);
+        return sBuilder.build();
+    }
+
     public static byte[] decryptSecureMessage(File certificate, SecureMessage.SecureMessagePacket
             secureMessagePacket, long waitMinutes) throws Exception {
         byte[][] decryptedContent = unpackAndDecryptData(certificate, secureMessagePacket, waitMinutes);
+        byte[]   rawData          = stitchData(decryptedContent, (int) secureMessagePacket.getContentLength());
+        if (verifyContentIntegrity(secureMessagePacket, rawData) && verifyMessage(certificate, secureMessagePacket
+                .getSignature().toByteArray(), rawData)) {
+            return rawData;
+        } else {
+            throw new Exception("Data integrity check failed. Unable to decrypt data. Sender id = " +
+                                        secureMessagePacket.getSenderId());
+        }
+    }
+
+    public static byte[] decryptSecureMessageOld(File certificate, SecureMessage.SecureMessagePacket
+            secureMessagePacket, long waitMinutes) throws Exception {
+        byte[][] decryptedContent = unpackAndDecryptDataOld(certificate, secureMessagePacket, waitMinutes);
         byte[]   rawData          = stitchData(decryptedContent, (int) secureMessagePacket.getContentLength());
         if (verifyContentIntegrity(secureMessagePacket, rawData) && verifyMessage(certificate, secureMessagePacket
                 .getSignature().toByteArray(), rawData)) {
@@ -145,7 +173,7 @@ public class EncryptionUtil {
             encryptedBlockChain.add(bytes.toByteArray());
         }
 
-        ForkJoinPool               forkJoinPool = new ForkJoinPool();
+        ForkJoinPool               forkJoinPool = new ForkJoinPool(numBlocks);
         List<Future<SecureResult>> futures      = new ArrayList<>();
         for (int i = 0; i < encryptedBlockChain.size(); i++) {
             futures.add(forkJoinPool.submit(new EncryptionCoreFJ(certificate, encryptedBlockChain.get(i), false, i)));
@@ -173,6 +201,35 @@ public class EncryptionUtil {
         return decryptedContent;
     }
 
+    private static byte[][] unpackAndDecryptDataOld(File certificate, SecureMessage.SecureMessagePacket
+            secureMessagePacket, long waitMinutes) throws ExecutionException, InterruptedException {
+        int numBlocks = secureMessagePacket.getContentList().size();
+
+        List<byte[]> encryptedBlockChain = new ArrayList<>();
+        for (ByteString bytes : secureMessagePacket.getContentList()) {
+            encryptedBlockChain.add(bytes.toByteArray());
+        }
+
+        List<EncryptionCore> encryptionCores = new ArrayList<>();
+        for (int i = 0; i < encryptedBlockChain.size(); i++) {
+            EncryptionCore decryptCore = new EncryptionCore(certificate, encryptedBlockChain.get(i), false, i);
+            encryptionCores.add(decryptCore);
+        }
+
+        ExecutorService            decryptionService = Executors.newFixedThreadPool(numBlocks);
+        List<Future<SecureResult>> futures           = decryptionService.invokeAll(encryptionCores);
+        decryptionService.shutdown();
+        decryptionService.awaitTermination(waitMinutes, TimeUnit.MINUTES);
+
+        byte[][] decryptedContent = new byte[numBlocks][ENCRYPTION_BLOCK_SIZE];
+        for (Future<SecureResult> future : futures) {
+            SecureResult result = future.get();
+            decryptedContent[result.getBlockId()] = result.getData();
+        }
+
+        return decryptedContent;
+    }
+
     private static List<ByteString> cutAndBoxData(File certificate, int contentLength, byte[] rawContent, long
             waitMinutes) throws
             InterruptedException, ExecutionException {
@@ -192,7 +249,7 @@ public class EncryptionUtil {
                 i = 0;
             }
         }
-        ForkJoinPool               forkJoinPool      = new ForkJoinPool();
+        ForkJoinPool               forkJoinPool      = new ForkJoinPool(numBlocks);
         List<Future<SecureResult>> futures           = new ArrayList<>();
         SecureResult[]             results           = new SecureResult[numBlocks];
         List<ByteString>           encryptedContents = new ArrayList<>();
@@ -223,6 +280,51 @@ public class EncryptionUtil {
         }
 
         forkJoinPool.shutdown();
+        return encryptedContents;
+    }
+
+    private static List<ByteString> cutAndBoxDataOld(File certificate, int contentLength, byte[] rawContent, long
+            waitMinutes) throws
+            InterruptedException, ExecutionException {
+        int numBlocks = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
+
+        int          blockSize   = (numBlocks > 1) ? ENCRYPTION_BLOCK_SIZE : contentLength;
+        List<byte[]> inputChunks = new ArrayList<>();
+        int          i           = 0;
+        byte[]       temp        = new byte[blockSize];
+
+        for (int j = 0; j < contentLength; j++) {
+            temp[i++] = rawContent[j];
+
+            if (i == blockSize || j == contentLength - 1) {
+                inputChunks.add(temp);
+                temp = new byte[blockSize];
+                i = 0;
+            }
+        }
+
+        List<EncryptionCore> encryptionCores   = new ArrayList<>();
+        SecureResult[]       results           = new SecureResult[numBlocks];
+        List<ByteString>     encryptedContents = new ArrayList<>();
+
+        for (i = 0; i < numBlocks; i++) {
+            encryptionCores.add(new EncryptionCore(certificate, inputChunks.get(i), true, i));
+        }
+
+        ExecutorService            encryptionService = Executors.newFixedThreadPool(numBlocks);
+        List<Future<SecureResult>> futures           = encryptionService.invokeAll(encryptionCores);
+        encryptionService.shutdown();
+        encryptionService.awaitTermination(waitMinutes, TimeUnit.MINUTES);
+
+        for (Future<SecureResult> future : futures) {
+            SecureResult result = future.get();
+            results[result.getBlockId()] = result;
+        }
+
+        for (i = 0; i < results.length; i++) {
+            encryptedContents.add(ByteString.copyFrom(results[i].getData()));
+        }
+
         return encryptedContents;
     }
 }
