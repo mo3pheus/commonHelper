@@ -51,6 +51,7 @@ public class EncryptionOperationsTest extends TestCase {
             System.out.println(telemetryData);
             System.out.println(THIN_SEPARATOR);
             System.out.println(SEPARATOR);
+            assertFalse(EncryptionUtil.COMPRESSION_ENABLED);
             assertTrue(roverStatusNew.equals(roverStatus));
         } catch (Exception e) {
             e.printStackTrace();

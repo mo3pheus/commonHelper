@@ -54,10 +54,9 @@ public class TextCompressionTest extends TestCase {
     public void testTextCompressionEnabled() {
         try {
             long start = System.currentTimeMillis();
-            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
-                    EncryptionUtil.compress(roverStatus.toByteArray()), 1);
-            byte[] decryptedContent = EncryptionUtil.decompress(EncryptionUtil.decryptSecureMessage
-                    (clientCertificate, secureMessagePacket, 1));
+            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate, roverStatus.toByteArray(), 1);
+            byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
+                    (clientCertificate, secureMessagePacket, 1);
             long stop = System.currentTimeMillis();
             String output = constructOutput("Text", "Parallel", true,
                     stop - start);
@@ -74,6 +73,7 @@ public class TextCompressionTest extends TestCase {
     public void testTextCompressionDisabled() {
         try {
             long start = System.currentTimeMillis();
+            EncryptionUtil.disableCompression();
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
                     roverStatus.toByteArray(), 1);
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage

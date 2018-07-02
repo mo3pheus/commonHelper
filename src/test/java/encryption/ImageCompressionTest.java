@@ -52,10 +52,9 @@ public class ImageCompressionTest extends TestCase {
     public void testImageCompressionEnabled() {
         try {
             long start = System.currentTimeMillis();
-            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
-                    EncryptionUtil.compress(roverStatus.toByteArray()), 1);
-            byte[] decryptedContent = EncryptionUtil.decompress(EncryptionUtil.decryptSecureMessage
-                    (clientCertificate, secureMessagePacket, 1));
+            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate, roverStatus.toByteArray(), 1);
+            byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
+                    (clientCertificate, secureMessagePacket, 1);
             long stop = System.currentTimeMillis();
             String output = constructOutput("Image", "Parallel", true,
                     stop - start);
@@ -72,6 +71,7 @@ public class ImageCompressionTest extends TestCase {
     public void testImageCompressionDisabled() {
         try {
             long start = System.currentTimeMillis();
+            EncryptionUtil.disableCompression();
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
                     roverStatus.toByteArray(), 1);
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
@@ -82,6 +82,7 @@ public class ImageCompressionTest extends TestCase {
             System.out.println(output);
             RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
+            assertFalse(EncryptionUtil.COMPRESSION_ENABLED);
             assertTrue(roverStatusNew.equals(roverStatus));
         } catch (Exception e) {
             e.printStackTrace();

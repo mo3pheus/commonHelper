@@ -22,7 +22,16 @@ import java.util.concurrent.*;
 
 public class EncryptionUtil {
     public static final int ENCRYPTION_BLOCK_SIZE = 2000;
+    public static boolean COMPRESSION_ENABLED = true;
     private static final int BUFFER_SIZE = 10485760;
+
+    public static void disableCompression() {
+        COMPRESSION_ENABLED = false;
+    }
+
+    public static void enableCompression() {
+        COMPRESSION_ENABLED = true;
+    }
 
     public synchronized static byte[] compress(byte[] data) throws IOException {
         BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data));
@@ -122,6 +131,9 @@ public class EncryptionUtil {
 
     public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent, long waitMinutes)
             throws Exception {
+        if(COMPRESSION_ENABLED) {
+            rawContent = compress(rawContent);
+        }
         long                                      start         = System.currentTimeMillis();
         SecureMessage.SecureMessagePacket.Builder sBuilder      = SecureMessage.SecureMessagePacket.newBuilder();
         int                                       contentLength = rawContent.length;
@@ -140,7 +152,10 @@ public class EncryptionUtil {
         byte[]   rawData          = stitchData(decryptedContent, (int) secureMessagePacket.getContentLength());
         if (verifyContentIntegrity(secureMessagePacket, rawData) && verifyMessage(certificate, secureMessagePacket
                 .getSignature().toByteArray(), rawData)) {
-            return rawData;
+            if(!COMPRESSION_ENABLED)
+                return rawData;
+            else
+                return decompress(rawData);
         } else {
             throw new Exception("Data integrity check failed. Unable to decrypt data. Sender id = " +
                                         secureMessagePacket.getSenderId());
