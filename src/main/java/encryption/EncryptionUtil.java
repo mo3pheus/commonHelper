@@ -22,16 +22,9 @@ import java.util.concurrent.*;
 
 public class EncryptionUtil {
     public static final int ENCRYPTION_BLOCK_SIZE = 2000;
-    public static boolean COMPRESSION_ENABLED = true;
     private static final int BUFFER_SIZE = 10485760;
 
-    public static void disableCompression() {
-        COMPRESSION_ENABLED = false;
-    }
 
-    public static void enableCompression() {
-        COMPRESSION_ENABLED = true;
-    }
 
     public synchronized static byte[] compress(byte[] data) throws IOException {
         BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data));
@@ -129,9 +122,10 @@ public class EncryptionUtil {
         return cipher.doFinal(encryptedContent);
     }
 
-    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent, long waitMinutes)
+    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent,
+                                                                long waitMinutes, boolean enableCompression)
             throws Exception {
-        if(COMPRESSION_ENABLED) {
+        if(enableCompression) {
             rawContent = compress(rawContent);
         }
         long                                      start         = System.currentTimeMillis();
@@ -147,12 +141,12 @@ public class EncryptionUtil {
     }
 
     public static byte[] decryptSecureMessage(File certificate, SecureMessage.SecureMessagePacket
-            secureMessagePacket, long waitMinutes) throws Exception {
+            secureMessagePacket, long waitMinutes, boolean enableDecompression) throws Exception {
         byte[][] decryptedContent = unpackAndDecryptData(certificate, secureMessagePacket, waitMinutes);
         byte[]   rawData          = stitchData(decryptedContent, (int) secureMessagePacket.getContentLength());
         if (verifyContentIntegrity(secureMessagePacket, rawData) && verifyMessage(certificate, secureMessagePacket
                 .getSignature().toByteArray(), rawData)) {
-            if(!COMPRESSION_ENABLED)
+            if(!enableDecompression)
                 return rawData;
             else
                 return decompress(rawData);

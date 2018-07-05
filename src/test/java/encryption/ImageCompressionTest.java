@@ -52,16 +52,24 @@ public class ImageCompressionTest extends TestCase {
     public void testImageCompressionEnabled() {
         try {
             long start = System.currentTimeMillis();
-            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate, roverStatus.toByteArray(), 1);
+
+            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
+                    roverStatus.toByteArray(), 1, true);
+
+            assertTrue(roverStatus.toByteArray().length >= secureMessagePacket.getContentLength());
+
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
-                    (clientCertificate, secureMessagePacket, 1);
+                    (clientCertificate, secureMessagePacket, 1, true);
             long stop = System.currentTimeMillis();
+
+            assertEquals(roverStatus.toByteArray().length, decryptedContent.length);
+
             String output = constructOutput("Image", "Parallel", true,
                     stop - start);
             System.out.println(output);
             RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
-            assertTrue(roverStatusNew.equals(roverStatus));
+            assertEquals(roverStatusNew, roverStatus);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -71,19 +79,25 @@ public class ImageCompressionTest extends TestCase {
     public void testImageCompressionDisabled() {
         try {
             long start = System.currentTimeMillis();
-            EncryptionUtil.disableCompression();
+
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
-                    roverStatus.toByteArray(), 1);
+                    roverStatus.toByteArray(), 1, false);
+
+            assertEquals(roverStatus.toByteArray().length, secureMessagePacket.getContentLength());
+
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
-                    (clientCertificate, secureMessagePacket, 1);
+                    (clientCertificate, secureMessagePacket, 1, false);
             long stop = System.currentTimeMillis();
+
+            assertEquals(roverStatus.toByteArray().length, decryptedContent.length);
+
+
             String output = constructOutput("Image", "Parallel", false,
                     stop - start);
             System.out.println(output);
             RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
-            assertFalse(EncryptionUtil.COMPRESSION_ENABLED);
-            assertTrue(roverStatusNew.equals(roverStatus));
+            assertEquals(roverStatusNew, roverStatus);
         } catch (Exception e) {
             e.printStackTrace();
         }

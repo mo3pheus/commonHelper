@@ -52,9 +52,9 @@ public class AudioCompressionTest extends TestCase {
         try {
             long start = System.currentTimeMillis();
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
-                    roverStatus.toByteArray(), 1);
+                    roverStatus.toByteArray(), 1, true);
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
-                    (clientCertificate, secureMessagePacket, 1);
+                    (clientCertificate, secureMessagePacket, 1, true);
             long stop = System.currentTimeMillis();
             String output = constructOutput("Audio", "Parallel", true,
                     stop - start);
@@ -72,19 +72,17 @@ public class AudioCompressionTest extends TestCase {
     public void testAudioCompressionDisabled() {
         try {
             long start = System.currentTimeMillis();
-            EncryptionUtil.disableCompression();
             secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
-                    roverStatus.toByteArray(), 1);
+                    roverStatus.toByteArray(), 1, false);
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
-                    (clientCertificate, secureMessagePacket, 1);
+                    (clientCertificate, secureMessagePacket, 1, true);
             long stop = System.currentTimeMillis();
             String output = constructOutput("Audio", "Parallel", false,
                     stop - start);
             System.out.println(output);
             RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
-            assertFalse(EncryptionUtil.COMPRESSION_ENABLED);
-            assertTrue(roverStatusNew.equals(roverStatus));
+            assertEquals(roverStatusNew, roverStatus);
         } catch (Exception e) {
             e.printStackTrace();
         }
