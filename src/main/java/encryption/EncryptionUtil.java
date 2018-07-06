@@ -5,6 +5,8 @@ import com.google.protobuf.ByteString;
 import domain.SecureResult;
 import exceptions.DataIntegrityException;
 import exceptions.SignatureVerificationFailureException;
+import org.apache.commons.compress.compressors.deflate.DeflateCompressorInputStream;
+import org.apache.commons.compress.compressors.deflate.DeflateCompressorOutputStream;
 import space.exploration.communications.protocol.security.SecureMessage;
 
 import javax.crypto.BadPaddingException;
@@ -20,6 +22,42 @@ import java.util.concurrent.*;
 
 public class EncryptionUtil {
     public static final int ENCRYPTION_BLOCK_SIZE = 2000;
+    private static final int BUFFER_SIZE = 10485760;
+
+
+
+    public synchronized static byte[] compress(byte[] data) throws IOException {
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data));
+        ByteArrayOutputStream fOut = new ByteArrayOutputStream();
+        BufferedOutputStream out = new BufferedOutputStream(fOut);
+
+        DeflateCompressorOutputStream compressorOut = new DeflateCompressorOutputStream(out);
+
+        byte[] buffer = new byte[BUFFER_SIZE];
+        int n;
+        while(-1 != (n = in.read(buffer))) {
+            compressorOut.write(buffer, 0, n);
+        }
+        compressorOut.close();
+        in.close();
+        return fOut.toByteArray();
+    }
+
+    public synchronized static byte[] decompress(byte[] data) throws IOException {
+        BufferedInputStream in = new BufferedInputStream(new ByteArrayInputStream(data));
+        ByteArrayOutputStream fOut = new ByteArrayOutputStream();
+
+        DeflateCompressorInputStream compressorIn = new DeflateCompressorInputStream(in);
+
+        byte[] buffer = new byte[BUFFER_SIZE];
+        int n;
+        while(-1 != (n = compressorIn.read(buffer))) {
+            fOut.write(buffer, 0, n);
+        }
+        compressorIn.close();
+        in.close();
+        return fOut.toByteArray();
+    }
 
     public synchronized static RsaSecureComsCertificate extractCertificate(File certFile) throws IOException,
             ClassNotFoundException {
@@ -84,8 +122,12 @@ public class EncryptionUtil {
         return cipher.doFinal(encryptedContent);
     }
 
-    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent, long waitMinutes)
+    public static SecureMessage.SecureMessagePacket encryptData(String senderId, File certificate, byte[] rawContent,
+                                                                long waitMinutes, boolean enableCompression)
             throws Exception {
+        if(enableCompression) {
+            rawContent = compress(rawContent);
+        }
         long                                      start         = System.currentTimeMillis();
         SecureMessage.SecureMessagePacket.Builder sBuilder      = SecureMessage.SecureMessagePacket.newBuilder();
         int                                       contentLength = rawContent.length;
@@ -99,12 +141,15 @@ public class EncryptionUtil {
     }
 
     public static byte[] decryptSecureMessage(File certificate, SecureMessage.SecureMessagePacket
-            secureMessagePacket, long waitMinutes) throws Exception {
+            secureMessagePacket, long waitMinutes, boolean enableDecompression) throws Exception {
         byte[][] decryptedContent = unpackAndDecryptData(certificate, secureMessagePacket, waitMinutes);
         byte[]   rawData          = stitchData(decryptedContent, (int) secureMessagePacket.getContentLength());
         if (verifyContentIntegrity(secureMessagePacket, rawData) && verifyMessage(certificate, secureMessagePacket
                 .getSignature().toByteArray(), rawData)) {
-            return rawData;
+            if(!enableDecompression)
+                return rawData;
+            else
+                return decompress(rawData);
         } else {
             throw new Exception("Data integrity check failed. Unable to decrypt data. Sender id = " +
                                         secureMessagePacket.getSenderId());

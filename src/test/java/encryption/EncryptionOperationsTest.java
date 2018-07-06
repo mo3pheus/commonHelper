@@ -37,9 +37,10 @@ public class EncryptionOperationsTest extends TestCase {
     public void testNewDataEncryption() {
         try {
             long start = System.currentTimeMillis();
-            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate, roverStatus.toByteArray(), 1);
+            secureMessagePacket = EncryptionUtil.encryptData("Server", serverCertificate,
+                    roverStatus.toByteArray(), 1, false);
             byte[] decryptedContent = EncryptionUtil.decryptSecureMessage
-                    (clientCertificate, secureMessagePacket, 1);
+                    (clientCertificate, secureMessagePacket, 1, false);
             System.out.println("Time taken for decryption = " + (System.currentTimeMillis() - start));
             RoverStatusOuterClass.RoverStatus roverStatusNew = RoverStatusOuterClass.RoverStatus.parseFrom
                     (decryptedContent);
@@ -51,7 +52,7 @@ public class EncryptionOperationsTest extends TestCase {
             System.out.println(telemetryData);
             System.out.println(THIN_SEPARATOR);
             System.out.println(SEPARATOR);
-            assertTrue(roverStatusNew.equals(roverStatus));
+            assertEquals(roverStatusNew, roverStatus);
         } catch (Exception e) {
             e.printStackTrace();
         }
