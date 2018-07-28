@@ -173,7 +173,7 @@ public class EncryptionUtil {
             encryptedBlockChain.add(bytes.toByteArray());
         }
 
-        ForkJoinPool               forkJoinPool = new ForkJoinPool(numBlocks);
+        ForkJoinPool               forkJoinPool = new ForkJoinPool();
         List<Future<SecureResult>> futures      = new ArrayList<>();
         for (int i = 0; i < encryptedBlockChain.size(); i++) {
             futures.add(forkJoinPool.submit(new EncryptionCoreFJ(certificate, encryptedBlockChain.get(i), false, i)));
@@ -249,7 +249,7 @@ public class EncryptionUtil {
                 i = 0;
             }
         }
-        ForkJoinPool               forkJoinPool      = new ForkJoinPool(numBlocks);
+        ForkJoinPool               forkJoinPool      = new ForkJoinPool();
         List<Future<SecureResult>> futures           = new ArrayList<>();
         SecureResult[]             results           = new SecureResult[numBlocks];
         List<ByteString>           encryptedContents = new ArrayList<>();
