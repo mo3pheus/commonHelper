@@ -7,7 +7,7 @@
 
     <groupId>space.exploration</groupId>
     <artifactId>common.helper</artifactId>
-    <version>1.2</version>
+    <version>1.2.1</version>
     <build>
         <plugins>
             <plugin>
