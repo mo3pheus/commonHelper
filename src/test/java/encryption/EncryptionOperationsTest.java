@@ -20,7 +20,7 @@ public class EncryptionOperationsTest extends TestCase {
     File                              clientCertificate   = new File("src/main/resources/encryptionKeys/client.ser");
     File                              serverCertificate   = new File("src/main/resources/encryptionKeys/server.ser");
     File                              imageFile           = new File
-            ("src/main/resources/data/roverStatus_1529583624656.log");
+            ("src/main/resources/data/roverStatus_1543211971261.log");
     SecureMessage.SecureMessagePacket secureMessagePacket = null;
     RoverStatusOuterClass.RoverStatus roverStatus         = null;
 

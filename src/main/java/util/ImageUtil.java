@@ -1,4 +1,4 @@
-package naasa.gov.mission.control.naasa.gov.mission.control.util;
+package util;
 
 import javax.swing.*;
 import java.awt.*;

@@ -17,17 +17,17 @@ import java.util.concurrent.*;
 public class EncryptionUtil {
     public static final int ENCRYPTION_BLOCK_SIZE = 2000;
 
-    public synchronized static RsaSecureComsCertificate extractCertificate(File certFile) throws IOException,
-            ClassNotFoundException {
+    public static RsaSecureComsCertificate extractCertificate(File certFile) throws IOException,
+                                                                                    ClassNotFoundException {
         FileInputStream          fileInputStream   = new FileInputStream(certFile);
         ObjectInputStream        objectInputStream = new ObjectInputStream(fileInputStream);
         RsaSecureComsCertificate comsCertificate   = (RsaSecureComsCertificate) objectInputStream.readObject();
         return comsCertificate;
     }
 
-    public synchronized static boolean verifyMessage(File certificate, byte[] signatureToVerify, byte[] content)
+    public static boolean verifyMessage(File certificate, byte[] signatureToVerify, byte[] content)
             throws InvalidKeyException, IOException, SignatureException, ClassNotFoundException,
-            NoSuchProviderException, NoSuchAlgorithmException {
+                   NoSuchProviderException, NoSuchAlgorithmException {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
         Signature                signature       = Signature.getInstance("SHA1withDSA", "SUN");
         signature.initVerify(comsCertificate.getSignaturePubKey());
@@ -45,7 +45,7 @@ public class EncryptionUtil {
         return signature.verify(signatureToVerify);
     }
 
-    public synchronized static byte[] signMessage(File certificate, byte[] encryptedContent) throws Exception {
+    public static byte[] signMessage(File certificate, byte[] encryptedContent) throws Exception {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
         Signature                dsa             = Signature.getInstance("SHA1withDSA", "SUN");
         dsa.initSign(comsCertificate.getSignaturePrvKey());
@@ -62,17 +62,20 @@ public class EncryptionUtil {
         return signature;
     }
 
-    public synchronized static byte[] encryptMessage(File certificate, byte[] rawContent) throws Exception {
+    public static byte[] encryptMessage(File certificate, byte[] rawContent) throws Exception {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
         Cipher                   cipher          = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.ENCRYPT_MODE, comsCertificate.getMessagePubKey());
         return cipher.doFinal(rawContent);
     }
 
-    public synchronized static byte[] decryptMessage(File certificate, byte[] encryptedContent) throws
-            ClassNotFoundException,
-            NoSuchAlgorithmException, InvalidKeyException, IllegalBlockSizeException, BadPaddingException,
-            NoSuchPaddingException, IOException {
+    public static byte[] decryptMessage(File certificate, byte[] encryptedContent) throws
+                                                                                   ClassNotFoundException,
+                                                                                   NoSuchAlgorithmException,
+                                                                                   InvalidKeyException,
+                                                                                   IllegalBlockSizeException,
+                                                                                   BadPaddingException,
+                                                                                   NoSuchPaddingException, IOException {
         RsaSecureComsCertificate comsCertificate = extractCertificate(certificate);
 
         Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
@@ -96,7 +99,7 @@ public class EncryptionUtil {
     }
 
     public static SecureMessage.SecureMessagePacket encryptDataOld(String senderId, File certificate, byte[] rawContent,
-                                                                long waitMinutes)
+                                                                   long waitMinutes)
             throws Exception {
         long                                      start         = System.currentTimeMillis();
         SecureMessage.SecureMessagePacket.Builder sBuilder      = SecureMessage.SecureMessagePacket.newBuilder();
@@ -136,14 +139,14 @@ public class EncryptionUtil {
         }
     }
 
-    public synchronized static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket,
-                                                              byte[]
-                                                                      rawContent) throws NoSuchAlgorithmException {
+    public static boolean verifyContentIntegrity(SecureMessage.SecureMessagePacket secureMessagePacket,
+                                                 byte[]
+                                                         rawContent) throws NoSuchAlgorithmException {
         byte[] hash = generateHash(rawContent);
         return Arrays.equals(hash, secureMessagePacket.getCheckSum().toByteArray());
     }
 
-    private synchronized static byte[] stitchData(byte[][] dataBlocks, int contentLength) {
+    private static byte[] stitchData(byte[][] dataBlocks, int contentLength) {
         int    i            = 0;
         byte[] stitchedData = new byte[contentLength];
 
@@ -158,7 +161,7 @@ public class EncryptionUtil {
         return stitchedData;
     }
 
-    private synchronized static byte[] generateHash(byte[] content) throws NoSuchAlgorithmException {
+    private static byte[] generateHash(byte[] content) throws NoSuchAlgorithmException {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         digest.update(content);
         return digest.digest();
@@ -173,8 +176,9 @@ public class EncryptionUtil {
             encryptedBlockChain.add(bytes.toByteArray());
         }
 
-        ForkJoinPool               forkJoinPool = new ForkJoinPool();
-        List<Future<SecureResult>> futures      = new ArrayList<>();
+        ForkJoinPool forkJoinPool = new ForkJoinPool(Runtime.getRuntime().availableProcessors(),
+                                                     ForkJoinPool.defaultForkJoinWorkerThreadFactory, null, true);
+        List<Future<SecureResult>> futures = new ArrayList<>();
         for (int i = 0; i < encryptedBlockChain.size(); i++) {
             futures.add(forkJoinPool.submit(new EncryptionCoreFJ(certificate, encryptedBlockChain.get(i), false, i)));
         }
@@ -232,7 +236,7 @@ public class EncryptionUtil {
 
     private static List<ByteString> cutAndBoxData(File certificate, int contentLength, byte[] rawContent, long
             waitMinutes) throws
-            InterruptedException, ExecutionException {
+                         InterruptedException, ExecutionException {
         int numBlocks = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
 
         int          blockSize   = (numBlocks > 1) ? ENCRYPTION_BLOCK_SIZE : contentLength;
@@ -285,7 +289,7 @@ public class EncryptionUtil {
 
     private static List<ByteString> cutAndBoxDataOld(File certificate, int contentLength, byte[] rawContent, long
             waitMinutes) throws
-            InterruptedException, ExecutionException {
+                         InterruptedException, ExecutionException {
         int numBlocks = (int) Math.ceil((double) contentLength / (double) ENCRYPTION_BLOCK_SIZE);
 
         int          blockSize   = (numBlocks > 1) ? ENCRYPTION_BLOCK_SIZE : contentLength;

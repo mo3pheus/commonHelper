@@ -7,7 +7,14 @@
 
     <groupId>space.exploration</groupId>
     <artifactId>common.helper</artifactId>
-    <version>1.2.1</version>
+    <version>1.3</version>
+    <properties>
+        <junit.output.dir>output</junit.output.dir>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
     <build>
         <plugins>
             <plugin>
@@ -105,7 +112,7 @@
         <dependency>
             <groupId>space.exploration</groupId>
             <artifactId>communications.protocol</artifactId>
-            <version>1.5</version>
+            <version>1.5.2</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.httpcomponents/httpclient -->
         <dependency>
