@@ -26,6 +26,7 @@ public class EncryptionCore implements Callable<SecureResult> {
     @Override
     public SecureResult call() throws Exception {
         Thread.currentThread().setName(operation + blockId);
+        logger.debug("Work began for " + operation + blockId);
         byte[] output = null;
         try {
             output = (encrypt) ? EncryptionUtil.encryptMessage(comsCertificate, input) : EncryptionUtil

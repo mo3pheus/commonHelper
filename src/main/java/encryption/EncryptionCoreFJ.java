@@ -8,13 +8,13 @@ import java.io.File;
 import java.util.concurrent.ForkJoinTask;
 
 public class EncryptionCoreFJ extends ForkJoinTask<SecureResult> {
-    private Logger       logger          = LoggerFactory.getLogger(EncryptionCoreFJ.class);
-    private boolean      encrypt         = false;
-    private byte[]       input           = null;
-    private File         comsCertificate = null;
-    private int          blockId         = 0;
-    private String       operation       = "";
-    private SecureResult result          = null;
+    private Logger logger = LoggerFactory.getLogger(EncryptionCoreFJ.class);
+    private boolean encrypt = false;
+    private byte[] input = null;
+    private File comsCertificate = null;
+    private int blockId = 0;
+    private String operation = "";
+    private SecureResult result = null;
 
     @Override
     public SecureResult getRawResult() {
@@ -29,6 +29,7 @@ public class EncryptionCoreFJ extends ForkJoinTask<SecureResult> {
     @Override
     protected boolean exec() {
         Thread.currentThread().setName(operation + blockId);
+        logger.debug("Work began for " + operation + blockId);
         byte[] output = null;
         try {
             output = (encrypt) ? EncryptionUtil.encryptMessage(comsCertificate, input) : EncryptionUtil

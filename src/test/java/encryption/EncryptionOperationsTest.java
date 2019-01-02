@@ -13,6 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 
 import org.junit.Test;
+import util.LoggerUtil;
+import util.UUIdSingleton;
 
 public class EncryptionOperationsTest extends TestCase {
     final String SEPARATOR      = "=============================================================================";
@@ -26,6 +28,7 @@ public class EncryptionOperationsTest extends TestCase {
 
     @Override
     public void setUp() throws IOException {
+        LoggerUtil.configureConsoleLogging(false, UUIdSingleton.getInstance().uuid);
         RoverStatusOuterClass.RoverStatus.Builder rBuilder = RoverStatusOuterClass.RoverStatus.newBuilder();
         rBuilder.setSolNumber(100);
         byte[] content = Files.readAllBytes(Paths.get(imageFile.getPath()));
