@@ -14,8 +14,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.security.spec.ECField;
-import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -69,7 +67,7 @@ public class Driver {
         RoverStatusOuterClass.RoverStatus roverStatus =
                 RoverStatusOuterClass.RoverStatus.parseFrom(decryptedContent);
         byte[] retrievedContent = roverStatus.getModuleMessage().toByteArray();
-        int comparison = Arrays.compare(originalContent, retrievedContent);
+        boolean comparison = originalContent.equals(retrievedContent);
         logger.info("Content comparison = " + comparison);
         return TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - startTimeMs);
     }
