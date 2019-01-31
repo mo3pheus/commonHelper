@@ -1,5 +1,6 @@
 package util;
 
+import biz.paluch.logging.gelf.log4j.GelfLogAppender;
 import com.yammer.metrics.core.Histogram;
 import org.apache.log4j.*;
 
@@ -98,6 +99,26 @@ public class LoggerUtil {
 
         consoleAppender.activateOptions();
         org.apache.log4j.Logger.getRootLogger().addAppender(consoleAppender);
+    }
+
+    public static GelfLogAppender getGelfLogAppender() {
+        GelfLogAppender gelfLogAppender = new GelfLogAppender();
+        gelfLogAppender.setGraylogHost("127.0.0.1");
+        gelfLogAppender.setPort(12201);
+        gelfLogAppender.setOriginHost("antares-mainframe");
+        gelfLogAppender.setThreshold(Level.ERROR);
+        gelfLogAppender.setTimestampPattern("yyyy-MM-DD E HH:mm:ss z");
+        gelfLogAppender.activateOptions();
+        return gelfLogAppender;
+    }
+
+    public static FileAppender getFileLogAppender() {
+        FileAppender fa = new FileAppender();
+        fa.setThreshold(Level.toLevel(Priority.INFO_INT));
+        fa.setFile("executionLogs/log_infoLevel_report_" + Long.toString(System.currentTimeMillis()) + ".log");
+        fa.setLayout(new EnhancedPatternLayout("%-6d [%t] %-5p %c{1.} - %m%n"));
+        fa.activateOptions();
+        return fa;
     }
 
     /**

@@ -67,7 +67,7 @@ public class Driver {
         RoverStatusOuterClass.RoverStatus roverStatus =
                 RoverStatusOuterClass.RoverStatus.parseFrom(decryptedContent);
         byte[] retrievedContent = roverStatus.getModuleMessage().toByteArray();
-        boolean comparison = originalContent.equals(retrievedContent);
+        boolean comparison = secureMessagePacket.toByteArray().equals(retrievedContent);
         logger.info("Content comparison = " + comparison);
         return TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - startTimeMs);
     }
