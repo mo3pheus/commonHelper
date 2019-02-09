@@ -1,8 +1,12 @@
 package bootstrap;
 
+import biz.paluch.logging.gelf.log4j.GelfLogAppender;
 import com.google.protobuf.ByteString;
 import encryption.EncryptionUtil;
 import encryption.KeyStoreUtil;
+import org.apache.log4j.FileAppender;
+import org.apache.log4j.Logger;
+import org.slf4j.LoggerFactory;
 import space.exploration.communications.protocol.communication.RoverStatusOuterClass;
 import space.exploration.communications.protocol.security.SecureMessage;
 import util.LoggerUtil;
@@ -15,6 +19,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 public class Driver {
@@ -25,10 +30,11 @@ public class Driver {
     public static File serverCertificate = new File("src/main/resources/encryptionKeys/server.ser");
 
     public static void main(String[] args) {
-        LoggerUtil.configureConsoleLogging(Boolean.parseBoolean(args[0]), UUIdSingleton.getInstance().uuid);
+        LoggerUtil.configureConsoleLogging(false, UUID.randomUUID());
+
         TrackedLogger logger = new TrackedLogger(Driver.class);
         logger.info(SEPARATOR);
-        logger.info("Start of benchmark test. Courtesy ---> M O R P H E U S ");
+        logger.error("Start of benchmark test. Courtesy ---> M O R P H E U S ");
         try {
             double totalTime = 0l;
             for (int i = 0; i < NUM_ITERATIONS; i++) {
